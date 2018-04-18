@@ -1,64 +1,79 @@
 /* 
-*	author f1est
-*	telegram: @F1estas (https://t.me/F1estas)	
+*	author		f1est
+*	telegram:	@F1estas (https://t.me/F1estas)
+*	e-mail:		www-b@mail.ru
 */
 
 pragma solidity ^0.4.18;
 
 contract Owned {
 	address owner;
+	address internal trustee;
 	
 	function Owned() public {	// конструктор
 		owner = msg.sender;
 	}
-
-    modifier only_owner() {
-		require(msg.sender == owner);
+	
+	function set_trustee(address _trustee) internal only_owner {
+		trustee = _trustee;
+	}
+	
+	function get_owners() internal view returns(address _owner, address _trustee) {
+		return (owner,trustee);
+	}
+    
+	modifier only_owner() {
+		require(msg.sender == owner || msg.sender == trustee);
 		_;
     }
 }
 
 contract Human is Owned {
 	bytes32 salt;		// криптографическая соль. В реальных проектах конечно же следует применять динамическую соль,
-					// но для тестового задания я буду использовать статическую, чтобы не усложнять реализацию
+						// но для тестового задания я буду использовать статическую, чтобы не усложнять реализацию
 	bytes32 first_name;
 	bytes32 last_name;
 	bytes32 passport;
 	bytes32 registration;
 //  and other requisites
 	
-	event debug_showOwner_Human(address,address,address);
+	event Debug_showOwner_Human(address,address,address);
 	
 	function Human(bytes32 _salt) public {
-		salt = _salt;
-		emit debug_showOwner_Human(msg.sender,owner,this);
+		require(_salt[0] != 0);		// проверим, что вводимое значение не пустое
+		salt = keccak256(_salt);
+		emit Debug_showOwner_Human(msg.sender,owner,this);
 	}	
 
-	function fill_all(bytes32 fname, bytes32 lname, bytes32 _passport, bytes32 _reg) public only_owner {
+	function fill_all(string fname, string lname, string _passport, string _reg) public only_owner {
 		set_first_name(fname);
 		set_last_name(lname);
 		set_passport(_passport);
 		set_registraion(_reg);
 	}
 
-	function set_first_name(bytes32 name) public only_owner {
+	function set_first_name(string name) public only_owner {
+		require(Deals.utfStringLength(name) > 0);
 		first_name = sha256(name, salt);
 	}
 
-	function set_last_name(bytes32 name) public only_owner{
+	function set_last_name(string name) public only_owner{
+		require(Deals.utfStringLength(name) > 0);
 		last_name = sha256(name, salt);
 	}
 
-	function set_passport(bytes32 _passport) public only_owner {
+	function set_passport(string _passport) public only_owner {
+		require(Deals.utfStringLength(_passport) > 0);
 		passport = sha256(_passport, salt);
 	}
 
-	function set_registraion(bytes32 _registation) public only_owner {
-		registration = sha256(_registation, salt);
+	function set_registraion(string _registration) public only_owner {
+		require(Deals.utfStringLength(_registration) > 0);
+		registration = sha256(_registration, salt);
 	}
 	
 	// оставим возможность проверить данные человека
-	function is_person(bytes32 fname, bytes32 lname, bytes32 _passport, bytes32 _reg) public view returns(bool) {
+	function is_person(string fname, string lname, string _passport, string _reg) public view returns(bool) {
 
 		if(first_name == sha256(fname, salt) &&
 		   last_name == sha256(lname, salt) &&
@@ -70,49 +85,29 @@ contract Human is Owned {
 	}
 }
 
-/*
-contract Seller is Owned, Human("_1q2w3e4r5t") {
-	function fill() public only_owner {	// для быстрого заполнения реквизитов, используется только в тестовом задании
-		set_first_name("Ivan");
-		set_last_name("Pupkin");
-		set_passport("0101112233");
-		set_registraion("Moskow city, Lenina st,1/8");
-	}
-}
-contract Buyer is Owned, Human("1a2s3d4f5g_") {
-	function fill() public only_owner {	// для быстрого заполнения реквизитов, используется только в тестовом задании
-		set_first_name("Peter");
-		set_last_name("Romanov");
-		set_passport("0001001122");
-		set_registraion("St.Peterspurg, Dvorcovaya nab. 38");
-	}
-}
-*/
-
 contract Object is Owned{
     
 	struct Rightholder {
 		address	human;				// правообладатель на объект (пример: "Пупкин Иван Иванович").
-									// т.к. в сделке уже имеются контракты всех участников сделки, 
-									// достаточно хранить адрес указывающий на контракт владельца
 //		string	name; 				// правообладатель на объект (пример: "Пупкин Иван Иванович"). 
-// NOTE: т.к. заперщено хранить персональные данные в "чистом" виде name не использую
+// NOTE: т.к. заперщено хранить персональные данные в "чистом" виде name не использется
 		bytes32	registration;		// вид, номер и дата регистрации права (пример: "Собственность, № 50-50-08/111/2002-101 от 01.02.2002")
+		uint32	timestamp;			// 
 		bytes32	restriction;		// ограничение (обременение) права (пример: "не зарегистрировано")
 		bool	b_no_restriction;	// это даст возможность легче/дешевле проверять ограничения
     }
 
 	Rightholder[] public rightholders;	// правообладатели
-	Rightholder[] public former_rightholders;	// предшествующие правообладатели. В этот параметр будет копироваться параметр rightholders 
+//	Rightholder[] public former_rightholders;	// предшествующие правообладатели. В этот параметр будет копироваться параметр rightholders 
 										// в момент создания сделки, для возможности отмены сделки, т.к. в случае отмены сделки 
 										// правообладатели должны остаться прежние
     int8 public num_of_storeys;			// этажность (пример: 2)
     uint16 public rooms_on_floor;		// номера на поэтажном плане
 	uint24 public square;				// площадь объекта (пример: 60.1 (кв.м))
 	bytes32 public cadastral_number;		// кадастровый (или условный) номер объекта (пример: "50:11:0050609")
-	bytes32 public name;					// наименование объекта (пример: "Квартира")
+	bytes32 public name;				// наименование объекта (пример: "Квартира")
 	bytes32 public use;					// назначение объекта (пример: "Жилое")
-	bytes32 public inventory_number;		// инвентарный номер, литер
+	bytes32 public inventory_number;	// инвентарный номер, литер
 	bytes32 public obj_address;			// адрес объекта (пример: "г.Москва ул.Ленина, д.1 кв.8")
     bytes32 public composition;			// состав (???)
     bytes32 public shared_constr_agreement;	// договоры участия в долевом строительстве (пример: "не зарегистрировано")
@@ -123,22 +118,29 @@ contract Object is Owned{
 // также требуют обновления как и в случае с rightholders (т.е. резервное копирование и очистка значений при создании объекта 
 // и восстановление в случае отмены сделки)
 
-	event debug_showOwner_Object(address,address,address);
+	event Debug_showOwner_Object(address,address,address);
+	event Added_Rightholder(address human);
 
-	function Object()public {
-		emit debug_showOwner_Object(msg.sender,owner,this);
+	function Object(bytes32 cadastr_num, address _trustee) public { // обязательное требование - кадастровый номер объекта, т.к. это один из ключевых параметров проведения сделки
+		require(cadastr_num[0] != 0 &&  _trustee != address(0)); // проверим, что вводимое значение не пустое
+		set_cadastral_number(cadastr_num);
+		set_trustee(_trustee);
+
+		emit Debug_showOwner_Object(msg.sender,owner,this);
 	}
 
-	function add_rightholder(Human _human, bytes32 _registation, bytes32 _restriction) public only_owner {
+	function add_rightholder(address _human, bytes32 _registration, bytes32 _restriction) public only_owner {
 		bool b_no_restriction;
+		bytes32 str_no_restr = 0xd0bdd0b520d0b7d0b0d180d0b5d0b3d0b8d181d182d180d0b8d180d0bed0b2d0; // строка "не зарегистрировано" в формате bytes32 (обрезана!!!)
+	
+		require(_human != address(0)); // проверим, что вводимые значения не пустые
 
-		bytes32 str_no_restr = 0xd0bdd0b520d0b7d0b0d180d0b5d0b3d0b8d181d182d180d0b8d180d0bed0b2d0; // "не зарегистрировано" -> bytes32
-		
-//		if(keccak256(_restriction) == keccak256(str_no_restr))
-		if(keccak256(_restriction) == keccak256(str_no_restr))
+		if(_restriction == str_no_restr || _restriction[0] == 0) // если обременений нет поставим соответсвующий флаг
 			b_no_restriction = true;
 
-		rightholders.push(Rightholder(_human,_registation,_restriction,b_no_restriction));
+		rightholders.push(Rightholder(_human, _registration, uint32(now), _restriction, b_no_restriction));
+
+		emit Added_Rightholder(_human);
 	}
 
 
@@ -147,47 +149,14 @@ contract Object is Owned{
 		TODO: fill other requisites
 */
 	}
-/*
-	function copy_object(Object other) public only_owner {
-		copy_rightholders(other.rightholders, rightholders);
-		num_of_storeys = other.num_of_storeys;
-		rooms_on_floor = other.rooms_on_floor;
-		square = other.square;
-		cadastral_number = other.cadastral_number;
-		name = other.name;
-		use = other.use;
-		inventory_number = other.inventory_number;
-		obj_address = other.obj_address;
-		composition = other.composition;
-		shared_constr_agreement = other.shared_constr_agreement;
-		claims = other.claims;
-		claimed_claims = other.claimed_claims;
-	}
-*/
-
-	function copy_object(Object other) public only_owner {
-		backup_rightholders();
-		free_rightholders();
-		copy_rightholders(other);
-		set_num_of_storeys(other.get_num_of_storeys());
-		set_rooms_on_floor(other.get_rooms_on_floor());
-		set_square(other.get_square());
-		set_cadastral_number(other.get_cadastral_number());
-		set_name(other.get_name());
-		set_use(other.get_use());
-		set_inventory_number(other.get_inventory_number());
-		set_obj_address(other.get_obj_address());
-		set_composition(other.get_composition());
-		set_shared_constr_agreement(other.get_shared_constr_agreement());
-		set_claims(other.get_claims());
-		set_claimed_claims(other.get_claimed_claims());
-	}
-
 
 	function set_num_of_storeys(int8 num) public only_owner {num_of_storeys = num;}
 	function set_rooms_on_floor(uint16 rooms) public only_owner {rooms_on_floor = rooms;}
 	function set_square(uint24 sq) public only_owner {square = sq;}
-	function set_cadastral_number(bytes32 cadastr_num) public only_owner {cadastral_number = cadastr_num;}
+	function set_cadastral_number(bytes32 cadastr_num) public only_owner {
+		require(cadastr_num[0] != 0);		// проверим, что вводимое значение не пустое
+		cadastral_number = cadastr_num;
+	}
 	function set_name(bytes32 _name) public only_owner {name = _name;}
 	function set_use(bytes32 _use) public only_owner {use = _use;}
 	function set_inventory_number(bytes32 _inventory_number) public only_owner {inventory_number = _inventory_number;}
@@ -196,6 +165,10 @@ contract Object is Owned{
 	function set_shared_constr_agreement(bytes32 _shared_constr_agreement) public only_owner {shared_constr_agreement = _shared_constr_agreement;}
 	function set_claims(bytes32 _calims) public only_owner {claims = _calims;}
 	function set_claimed_claims(bytes32 _calims) public only_owner {claimed_claims = _calims;}
+	function set_registration_for_last_rightholder(bytes32 _registration) public only_owner {
+		uint length = rightholders.length;
+		rightholders[length - 1].registration = _registration;
+	}
 
 	function get_num_of_storeys() public view returns(int8){return num_of_storeys;}
 	function get_rooms_on_floor() public view returns(uint16){return rooms_on_floor;}
@@ -216,6 +189,24 @@ contract Object is Owned{
 	function get_rightholder_restriction_by_index(uint index) public view returns(bytes32) {return rightholders[index].restriction;}
 	function get_rightholder_brestriction_by_index(uint index) public view returns(bool) {return rightholders[index].b_no_restriction;}
 
+/*
+	function copy_object(Object other) public only_owner {
+		backup_rightholders();
+		free_rightholders();
+		copy_rightholders(other);
+		set_num_of_storeys(other.get_num_of_storeys());
+		set_rooms_on_floor(other.get_rooms_on_floor());
+		set_square(other.get_square());
+		set_cadastral_number(other.get_cadastral_number());
+		set_name(other.get_name());
+		set_use(other.get_use());
+		set_inventory_number(other.get_inventory_number());
+		set_obj_address(other.get_obj_address());
+		set_composition(other.get_composition());
+		set_shared_constr_agreement(other.get_shared_constr_agreement());
+		set_claims(other.get_claims());
+		set_claimed_claims(other.get_claimed_claims());
+	}
 
 	function copy_rightholders(Rightholder[] from, Rightholder[] storage to) private only_owner {
 		for(uint i = 0; i < from.length; i++) {
@@ -247,13 +238,14 @@ contract Object is Owned{
 		free_backup();
 	}
 	
+	function free_backup() public only_owner {
+		delete former_rightholders;
+	}
+*/
 	function free_rightholders() public only_owner {
 		delete rightholders;
 	}
 
-	function free_backup() public only_owner {
-		delete former_rightholders;
-	}
 }
 
 contract Selling is Owned {
@@ -263,23 +255,38 @@ contract Selling is Owned {
 	using Deals for Deals.itmap;
 	Deals.itmap deals;
 
-	event debug_printDeal(Deals.Record deal, uint map_size, uint total_key);
-	event debug_showOwner_Selling(address,address,address);
+	event Debug_printDeal(Deals.Record deal, uint map_size, uint total_key);
+	event Debug_showOwner_Selling(address,address,address);
 
 	event Created();
 	event Signed();
 	event InProcess();
 	event Executed();
-	event Aborted();
 
-	function deal_check(bytes32 key) public view returns(Deals.State state) {
-		return deals.get_state(key);
+	function deal_check(address obj) public view returns(Deals.State state) {
+		return deals.get_state(Deals.get_key(obj));
 	}
 
 	// создание сделки
-	function create(bytes32 key, uint cost) public only_owner returns(Deals.State state){
-		require(cost > 0);
+	function create(uint cost, address seller, address buyer, address object) public only_owner returns(Deals.State state){
+		// проверим, что вводимые значения не пустые
+		require(cost > 0 && 
+				seller != address(0) && 
+				buyer != address(0) && 
+				object != address(0)); 
+/*		
+		// проверим не продает ли продавец самому себе
+		require(Human(seller).get_owner() != Human(buyer).get_owner());
+
+		// проверим, что owner продавца и owner объекта совпадают
+		require(Human(seller).get_owner() == Object(object).get_owner());
 		
+		// проверим, что owner проводящего сделку (Selling) и owner объекта совпадают
+		require(get_owner() == Object(object).get_owner());
+*/
+
+		bytes32 key = Deals.get_key(object);
+/*		
 		// если по данному оъекту уже совершались сделки создадим новую сделку на основе последней
 		// т.е. копируем реквизиты объекта из последней сделки
 		if(deals.exist(key)) {
@@ -287,17 +294,24 @@ contract Selling is Owned {
 		}
 		// иначе создае новый объект
 		else
-			state = deals.insert(key, cost);
+*/
+			state = deals.insert(cost, seller, buyer, object);
 
-		emit debug_printDeal(deals.get_last(key), deals.keysNames.length, deals.get_num_of(key));
-		emit debug_showOwner_Selling(msg.sender,owner,this);
+		emit Debug_printDeal(deals.get_last(key), deals.keysNames.length, deals.get_num_of(key));
+		emit Debug_showOwner_Selling(msg.sender,owner,this);
 
 		emit Created();
 	}
 
 	// передаются подписи двух клиентов	(по	сути отпечатки ЭЦП), меняет	состояние на "Подписан".	
-	function set_signature(bytes32 key, bytes32 ds_seller, bytes32 ds_buyer) public only_owner returns (Deals.State state) {
+	function set_signature(address object, bytes32 ds_seller, bytes32 ds_buyer) public only_owner returns (Deals.State state) {
+		require(object != address(0) &&
+				ds_seller[0] != 0 &&
+				ds_buyer[0] != 0); // проверим, что вводимые значения не пустые
+		
+		bytes32 key = Deals.get_key(object);
 		Deals.State _state = deals.get_state(key);
+		
 		require(_state == Deals.State.created);
 /*
 			... do something with ds_seller and ds_buyer ...
@@ -306,18 +320,25 @@ contract Selling is Owned {
 		return deals.set_state(key, Deals.State.signed);
 	}
 
-	// меняет состояние,	Х	–	с	"подписан"	на	"в процессе исполнения",
-	// Y - с "в	процессе исполнения" на "исполнен"
-	function change_state_deal(bytes32 key) public only_owner returns (Deals.State state)	{
+	// меняет состояние, с "подписан" на "в процессе исполнения",
+	// с "в	процессе исполнения" на "исполнен"
+	function change_state_deal(address object) public only_owner returns (Deals.State state)	{
+		bytes32 key = Deals.get_key(object);
 		Deals.State _state = deals.get_state(key);
+		
 		require(_state == Deals.State.signed || _state == Deals.State.pending);
 
 		if(_state == Deals.State.signed) {
+/*
+			... do something ...
+*/
 			emit InProcess();
 			return deals.set_state(key, Deals.State.pending);
 		}
 
 		else if(_state == Deals.State.pending) {
+			deals.sold(key); //передача прав собственности
+
 			emit Executed();
 			return deals.set_state(key, Deals.State.executed);
 		}
@@ -325,11 +346,26 @@ contract Selling is Owned {
 		return deals.get_state(key);
 	}
 
-	function cancel_deal(bytes32 key) public only_owner returns (Deals.State state) {
+	function set_registration_for_rightholder(address object, bytes32 _registration) public only_owner {
+		bytes32 key = Deals.get_key(object);
+		Object obj = Object(deals.get_last(key).object);
+		
+		obj.set_registration_for_last_rightholder(_registration);
+	}
+
+	function add_rightholder(address object, address _human, bytes32 _registration, bytes32 _restriction) public only_owner {
+		bytes32 key = Deals.get_key(object);
+		Object obj = Object(deals.get_last(key).object);
+
+		obj.add_rightholder(_human,_registration,_restriction);		
+	}
+/*
+	event Aborted();
+	function cancel_deal(string key) public only_owner returns (Deals.State state) {
 		state = deals.cancelling(key);
 		emit Aborted();
 	}
-
+*/
 /*
 	function get_deal(bytes32 key) public view returns(uint total_deals, uint total_key_deals, Deals.State state) {
 		 var deal = deals.get_last(key);
@@ -338,7 +374,6 @@ contract Selling is Owned {
 		 return (deals.keysNames.length, deals.get_num_of(key), deal.state);
 	}
 */
-
 /*
 	// получить всю историю сделок по объекту
 	function get_all_deals(bytes32 key) public view returns (uint){
@@ -368,9 +403,9 @@ library Deals {
 		bool exists;
 		State state;
 		uint cost;		// стоимость объекта
-		Human seller;
-		Human buyer;
-		Object object;
+		address seller;
+		address buyer;
+		address object;
 	}
 	
 	struct itmap {
@@ -378,8 +413,11 @@ library Deals {
 		bytes32[] keysNames;
 	}
 	
-	function base_insert(itmap storage self, bytes32 key, uint cost, Object obj) internal returns (State) {
+	function base_insert(itmap storage self, uint cost, address seller, address buyer, address obj) private returns (State) {
 
+		Object object = Object(obj);
+		bytes32 key = object.get_cadastral_number(); 
+		
 		if (self.data[key].length == 0) {
 			// добавим очередной ключ к списку ключей
 			self.keysNames.push(key);
@@ -405,23 +443,18 @@ library Deals {
 		self.data[key].push(Record(true, 
 								  State.created,
 								  cost,
-								  new Human("_1q2w3e4r5t"),		// для теста я буду использовать статическую криптосоль, чтобы не усложнять реализацию
-								  new Human("1a2s3d4f5g_"),		// для теста я буду использовать статическую криптосоль, чтобы не усложнять реализацию
+								  seller,	
+								  buyer,	
 								  obj
 								  ));
 		return get_state(self, key); 
 	}
 
 	// новая сделка с новым объектом по которому еще небыло сделок
-	function insert(itmap storage self, bytes32 key, uint cost) internal returns (State) {
-		Object new_object = new Object();
-		
-		new_object.set_cadastral_number(key);
-		new_object.fill_other_requisites();
-		
-		return  base_insert(self, key, cost, new_object);
+	function insert(itmap storage self, uint cost, address seller, address buyer, address object) internal returns (State) {
+		return  base_insert(self, cost, seller, buyer, object);
 	}
-
+/*
 	// новая сделка на основе существующей
 	function insert(itmap storage self, bytes32 key, uint cost, Record exist_record) internal returns (State) {
 		Object updated_object = new Object();
@@ -436,6 +469,13 @@ library Deals {
 // и восстановление в случае отмены сделки)
 		
 		return base_insert(self, key, cost, updated_object);
+	}
+*/
+
+	// получить ключ (кадастровый номер) объекта
+	function get_key(address object) public view returns (bytes32 key) {
+		require(object != address(0));
+		return Object(object).get_cadastral_number();
 	}
 
 	// проверить наличие сделок по данному объекту 
@@ -476,9 +516,21 @@ library Deals {
 
 		require(self.data[key][recordsLen - 1].exists == true);
 		self.data[key][recordsLen - 1].state = state;
-		return self.data[key][recordsLen - 1].state;
+		return get_last(self,key).state;
 	}
-	
+
+	// передча прав собственности
+	function sold(itmap storage self, bytes32 key) internal {
+		Object obj = Object(get_last(self, key).object);
+		obj.free_rightholders();
+
+// TODO: сформировать правильный параметр _registration (вид, номер и дата регистрации права (пример: "Собственность, № 50-50-08/111/2002-101 от 01.02.2002")))
+		obj.add_rightholder(get_last(self, key).buyer,	// новый правообладатель
+							"",							// заполним дату регистрации позже вызовом функции set_registration_for_rightholder()
+							0);
+	}
+
+/*
 	// Т.к. необходимо хранить все сделки совершенные через	смарт-контракт, 
 	// то реализация удаления сделки из хранилища не предусматривается.
 	// Вместо этого добавим процедуру отмены сделки
@@ -491,10 +543,30 @@ library Deals {
 
 		// восстановим прежних правообладателей
 		self.data[key][recordsLen - 1].object.restore_rightholders();
-/*
-TODO: return back money minus commision?!
-*/
+// TODO: return back money minus commision?!
 		self.data[key][recordsLen - 1].state = State.inactive;
 		return get_state(self, key);
+	}
+*/
+	function utfStringLength(string str) public pure returns (uint length)
+	{
+		uint i=0;
+		bytes memory string_rep = bytes(str);
+		
+		while (i < string_rep.length)	{
+			if (string_rep[i]>>7==0)
+				i+=1;
+			else if (string_rep[i]>>5==0x6)
+				i+=2;
+			else if (string_rep[i]>>4==0xE)
+				i+=3;
+			else if (string_rep[i]>>3==0x1E)
+				i+=4;
+			else
+				//For safety
+				i+=1;
+				
+			length++;
+		}
 	}
 }
