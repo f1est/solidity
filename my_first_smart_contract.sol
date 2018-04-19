@@ -8,17 +8,17 @@ pragma solidity ^0.4.18;
 
 contract Owned {
 	address owner;
-	address internal trustee;
+	address trustee;
 	
 	function Owned() public {	// конструктор
 		owner = msg.sender;
 	}
 	
-	function set_trustee(address _trustee) internal only_owner {
+	function set_trustee(address _trustee) public only_owner {
 		trustee = _trustee;
 	}
 	
-	function get_owners() internal view returns(address _owner, address _trustee) {
+	function get_owners() public view returns(address _owner, address _trustee) {
 		return (owner,trustee);
 	}
     
@@ -121,11 +121,9 @@ contract Object is Owned{
 	event Debug_showOwner_Object(address,address,address);
 	event Added_Rightholder(address human);
 
-	function Object(bytes32 cadastr_num, address _trustee) public { // обязательное требование - кадастровый номер объекта, т.к. это один из ключевых параметров проведения сделки
-		require(cadastr_num[0] != 0 &&  _trustee != address(0)); // проверим, что вводимое значение не пустое
+	function Object(bytes32 cadastr_num)public { // обязательное требование - кадастровый номер объекта, т.к. это один из ключевых параметров проведения сделки
+		require(cadastr_num[0] != 0); // проверим, что вводимое значение не пустое
 		set_cadastral_number(cadastr_num);
-		set_trustee(_trustee);
-
 		emit Debug_showOwner_Object(msg.sender,owner,this);
 	}
 
@@ -133,7 +131,7 @@ contract Object is Owned{
 		bool b_no_restriction;
 		bytes32 str_no_restr = 0xd0bdd0b520d0b7d0b0d180d0b5d0b3d0b8d181d182d180d0b8d180d0bed0b2d0; // строка "не зарегистрировано" в формате bytes32 (обрезана!!!)
 	
-		require(_human != address(0)); // проверим, что вводимые значения не пустые
+		require(_human!=address(0)); // проверим, что вводимые значения не пустые
 
 		if(_restriction == str_no_restr || _restriction[0] == 0) // если обременений нет поставим соответсвующий флаг
 			b_no_restriction = true;
@@ -320,8 +318,8 @@ contract Selling is Owned {
 		return deals.set_state(key, Deals.State.signed);
 	}
 
-	// меняет состояние, с "подписан" на "в процессе исполнения",
-	// с "в	процессе исполнения" на "исполнен"
+	// меняет состояние,	Х	–	с	"подписан"	на	"в процессе исполнения",
+	// Y - с "в	процессе исполнения" на "исполнен"
 	function change_state_deal(address object) public only_owner returns (Deals.State state)	{
 		bytes32 key = Deals.get_key(object);
 		Deals.State _state = deals.get_state(key);
@@ -329,9 +327,6 @@ contract Selling is Owned {
 		require(_state == Deals.State.signed || _state == Deals.State.pending);
 
 		if(_state == Deals.State.signed) {
-/*
-			... do something ...
-*/
 			emit InProcess();
 			return deals.set_state(key, Deals.State.pending);
 		}
@@ -521,6 +516,14 @@ library Deals {
 
 	// передча прав собственности
 	function sold(itmap storage self, bytes32 key) internal {
+/*
+		uint recordsLen = self.data[key].length;
+
+		require(self.data[key][recordsLen - 1].exists == true);
+
+
+		Object obj = Object(self.data[key][recordsLen - 1].object);
+*/
 		Object obj = Object(get_last(self, key).object);
 		obj.free_rightholders();
 
